@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "fixture": "data/person-demo.jpg",
+  "simulated_geolocation_and_nighttime": true,
+  "events": 1,
+  "detections": 15,
+  "evidence_read_http_status": 200,
+  "ack_state": "EN_REVISION",
+  "metrics": {
+    "state": "disabled",
+    "frames_processed": 5,
+    "detections_saved": 15,
+    "failures": 0,
+    "latency_samples": 5,
+    "capture_to_db_p50_ms": 117.00626799938618,
+    "capture_to_db_p95_ms": 123.97549799970875,
+    "geolocation_source": "simulated"
+  },
+  "limitation": "Public test image; not an independent precision/recall evaluation or flight video"
+}

@@ -90,3 +90,7 @@ logs/*.log
 *.db
 *.sqlite
 *.sqlite3
+
+# Evidencia y pesos de visión locales (no versionar datos de vigilancia).
+/data/
+/models/

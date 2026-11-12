@@ -74,3 +74,83 @@ async def websocket_video_telemetry(websocket: WebSocket):
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
         video_telemetry_manager.disconnect(websocket)
+import time
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse, Response, StreamingResponse
+
+from app.api import deps
+from app.services.video_service import VideoService, get_video_service
+
+router = APIRouter()
+protected = [Depends(deps.require_guard_or_admin)]
+HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+
+
+@router.get("/status", dependencies=protected)
+def video_status(service: VideoService = Depends(get_video_service)):
+    return service.status()
+
+
+def available_frame(service):
+    frame = service.latest()
+    if frame is None:
+        raise HTTPException(status_code=503, detail="No hay un frame de video reciente disponible")
+    return frame
+
+
+@router.get("/frame", dependencies=protected, responses={200: {"content": {"image/jpeg": {}}}})
+def video_frame(service: VideoService = Depends(get_video_service)):
+    frame = available_frame(service)
+    return Response(
+        frame.jpeg,
+        media_type="image/jpeg",
+        headers={
+            **HEADERS,
+            "X-Frame-Sequence": str(frame.sequence),
+            "X-Captured-At": frame.captured_at.isoformat(),
+        },
+    )
+
+
+async def stream_frames(service, first):
+    deadline = time.monotonic() + service.settings.VIDEO_STREAM_SECONDS
+    last_sequence = None
+    frame = first
+    try:
+        while time.monotonic() < deadline:
+            if frame is None:
+                break  # Cerrar el stream; el cliente puede reconectar cuando vuelva la fuente.
+            if frame.sequence != last_sequence:
+                yield (
+                    b"--frame\r\nContent-Type: image/jpeg\r\n"
+                    + f"Content-Length: {len(frame.jpeg)}\r\n".encode()
+                    + f"X-Frame-Sequence: {frame.sequence}\r\n".encode()
+                    + f"X-Captured-At: {frame.captured_at.isoformat()}\r\n\r\n".encode()
+                    + frame.jpeg
+                    + b"\r\n"
+                )
+                last_sequence = frame.sequence
+            await asyncio.sleep(1 / service.settings.VIDEO_FPS)
+            frame = service.latest()
+        yield b"--frame--\r\n"
+    except asyncio.CancelledError:
+        raise
+
+
+@router.get("/stream", dependencies=protected)
+def video_stream(service: VideoService = Depends(get_video_service)):
+    first = available_frame(service)
+    return StreamingResponse(
+        stream_frames(service, first), media_type="multipart/x-mixed-replace; boundary=frame", headers=HEADERS
+    )
+
+
+@router.get("/viewer", include_in_schema=False)
+def video_viewer():
+    return FileResponse(
+        Path(__file__).resolve().parents[3] / "static" / "monitor.html",
+        media_type="text/html",
+        headers={"Cache-Control": "no-store"},
+    )

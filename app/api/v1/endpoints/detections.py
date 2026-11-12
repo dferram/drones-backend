@@ -1,11 +1,9 @@
-from datetime import datetime
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.models.detection import Deteccion
 from app.schemas.detection import DeteccionCreate, DeteccionResponse
-from app.services.event_rules import evaluate_detection_for_event
+from app.services.ingestion_service import ingest_batch
 
 router = APIRouter()
 
@@ -14,12 +12,8 @@ router = APIRouter()
     "/ingest",
     response_model=DeteccionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Ingesta de detecciones por visión/IA",
-    description=(
-        "Recibe detecciones en tiempo real (humo/personas) generadas por el"
-        " módulo de visión, las persiste y evalúa reglas de negocio para"
-        " generar eventos."
-    ),
+    dependencies=[Depends(deps.require_admin)],
+    summary="Ingesta autenticada de detecciones por visión/IA",
 )
 async def ingest_detection(
     detection_in: DeteccionCreate,
@@ -47,3 +41,5 @@ async def ingest_detection(
   db.refresh(db_detection)
 
   return db_detection
+def ingest_detection(detection_in: DeteccionCreate, db: Session = Depends(deps.get_db)):
+    return ingest_batch(db, [detection_in])[0]

@@ -42,3 +42,7 @@ pytest-asyncio>=0.23.0
 dronekit>=2.9.2
 future>=1.0.0  # DroneKit importa past.builtins sin declarar esta dependencia
 MAVProxy>=1.8.0
+
+# Video: procesamiento de frames sin dependencias gráficas del sistema.
+opencv-python-headless>=4.10.0
+numpy>=1.26.0

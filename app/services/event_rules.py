@@ -1,7 +1,13 @@
-from datetime import datetime
+"""Reglas de eventos; las fechas persistidas se interpretan como UTC."""
+
+import math
+from datetime import UTC, timedelta
+from zoneinfo import ZoneInfo
+
 from sqlalchemy.orm import Session
 
 from app.models.alert import Alerta
+from app.core.config import settings
 from app.models.detection import Deteccion
 from app.models.event import Evento
 from app.services.notfication_service import notification_manager
@@ -101,3 +107,60 @@ async def evaluate_detection_for_event(
         await notification_manager.broadcast_alert(payload_broadcast)
 
     return nuevo_evento
+def distance_m(lat1, lon1, lat2, lon2):
+    lat1, lat2 = math.radians(float(lat1)), math.radians(float(lat2))
+    dlon = math.radians(float(lon2) - float(lon1))
+    a = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
+    return 6371000 * 2 * math.asin(math.sqrt(min(1, max(0, a))))
+
+
+def evaluate_detection_for_event(db: Session, deteccion: Deteccion) -> Evento | None:
+    """Agrupa evidencia cercana de un vuelo en un evento abierto de ventana fija."""
+    if deteccion.nivel_confianza < UMBRAL_CONFIANZA:
+        return None
+    fecha = deteccion.timestamp
+    local = fecha.replace(tzinfo=UTC).astimezone(ZoneInfo(settings.EVENT_TIMEZONE))
+    if deteccion.tipo == "HUMO":
+        tipo, criticidad = "HUMO_DETECTADO", "CRITICA"
+    elif deteccion.tipo == "PERSONA" and (local.hour >= 21 or local.hour < 6):
+        tipo, criticidad = "PERSONA_NOCTURNA", "ALTA"
+    else:
+        return None
+
+    window = timedelta(seconds=settings.EVENT_DEDUP_SECONDS)
+    candidates = (
+        db.query(Evento)
+        .filter(
+            Evento.tipo == tipo,
+            Evento.estado.in_(["PENDIENTE", "EN_REVISION"]),
+            Evento.created_at >= fecha - window,
+            Evento.created_at <= fecha + window,
+        )
+        .order_by(Evento.created_at.desc(), Evento.id.desc())
+        .all()
+    )
+    for event in candidates:
+        # Comparar con la primera evidencia evita extender la región con cada frame.
+        anchor = db.query(Deteccion).filter(Deteccion.evento_id == event.id).order_by(Deteccion.id).first()
+        if anchor is not None and anchor.vuelo_id == deteccion.vuelo_id:
+            if (
+                distance_m(anchor.latitud, anchor.longitud, deteccion.latitud, deteccion.longitud)
+                <= settings.EVENT_DEDUP_RADIUS_M
+            ):
+                deteccion.evento_id = event.id
+                return event
+
+    event = Evento(
+        tipo=tipo,
+        nivel_criticidad=criticidad,
+        descripcion=(
+            f"{deteccion.tipo} con confianza del {deteccion.nivel_confianza * 100:.1f}% "
+            f"en ({deteccion.latitud}, {deteccion.longitud}); hora local {local.isoformat()}."
+        ),
+        estado="PENDIENTE",
+        created_at=fecha,
+    )
+    db.add(event)
+    db.flush()
+    deteccion.evento_id = event.id
+    return event

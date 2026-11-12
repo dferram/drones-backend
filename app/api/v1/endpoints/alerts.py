@@ -96,3 +96,38 @@ async def websocket_notifications(websocket: WebSocket):
             await websocket.receive_text()  # Mantiene vivo el canal
     except WebSocketDisconnect:
         notification_manager.disconnect(websocket)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session, selectinload
+
+from app.api import deps
+from app.models.event import Evento
+from app.schemas.event import EventoDetailResponse, EventoResponse
+
+router = APIRouter(dependencies=[Depends(deps.require_guard_or_admin)])
+
+
+@router.get("/", response_model=list[EventoDetailResponse])
+def list_alerts(
+    after_id: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), db: Session = Depends(deps.get_db)
+):
+    """Bandeja consultable: eventos abiertos con evidencia. after_id es un cursor de nuevas alertas."""
+    return (
+        db.query(Evento)
+        .options(selectinload(Evento.detecciones))
+        .filter(Evento.id > after_id, Evento.estado.in_(["PENDIENTE", "EN_REVISION"]))
+        .order_by(Evento.id)
+        .limit(limit)
+        .all()
+    )
+
+
+@router.post("/{event_id}/ack", response_model=EventoResponse)
+def acknowledge(event_id: int, db: Session = Depends(deps.get_db)):
+    event = db.query(Evento).filter(Evento.id == event_id).with_for_update().first()
+    if event is None:
+        raise HTTPException(404, "Alerta no encontrada")
+    if event.estado == "PENDIENTE":
+        event.estado = "EN_REVISION"
+        db.commit()
+        db.refresh(event)
+    return event

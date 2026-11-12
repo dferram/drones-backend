@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -18,7 +19,7 @@ router = APIRouter()
     "/",
     response_model=list[EventoResponse],
     summary="Listar eventos de seguridad",
-    description="Retorna el listado de eventos con filtros opcionales de tipo, estado, rango de fechas y paginación. Accesible por Guardia y Admin.",
+    description=("Lista eventos con filtros de tipo, estado, fechas y paginación. Accesible por Guardia y Admin."),
 )
 def list_events(
     tipo: str | None = Query(None, description="Filtrar por tipo (ej. PERSONA_NOCTURNA, HUMO_DETECTADO)"),
@@ -31,6 +32,14 @@ def list_events(
     current_user: Usuario = Depends(deps.require_guard_or_admin),
 ):
     query = db.query(Evento)
+
+    # La BD guarda UTC sin tzinfo; los filtros sin offset también se interpretan como UTC.
+    if fecha_inicio and fecha_inicio.tzinfo:
+        fecha_inicio = fecha_inicio.astimezone(UTC).replace(tzinfo=None)
+    if fecha_fin and fecha_fin.tzinfo:
+        fecha_fin = fecha_fin.astimezone(UTC).replace(tzinfo=None)
+    if fecha_inicio and fecha_fin and fecha_inicio > fecha_fin:
+        raise HTTPException(status_code=422, detail="fecha_inicio debe ser anterior o igual a fecha_fin")
 
     if tipo:
         query = query.filter(Evento.tipo == tipo.upper())
@@ -49,19 +58,14 @@ def list_events(
     "/{id}",
     response_model=EventoDetailResponse,
     summary="Obtener detalle de un evento",
-    description="Retorna el detalle completo de un evento junto con sus detecciones y enlaces a los frames de evidencia visual.",
+    description="Retorna un evento con sus detecciones y enlaces a los frames de evidencia visual.",
 )
 def get_event(
     id: int,
     db: Session = Depends(deps.get_db),
     current_user: Usuario = Depends(deps.require_guard_or_admin),
 ):
-    evento = (
-        db.query(Evento)
-        .options(joinedload(Evento.detecciones))
-        .filter(Evento.id == id)
-        .first()
-    )
+    evento = db.query(Evento).options(joinedload(Evento.detecciones)).filter(Evento.id == id).first()
     if not evento:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

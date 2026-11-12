@@ -1,0 +1,97 @@
+{
+  "simulator": "/home/ferram/.dronekit/sitl/copter-3.3/apm",
+  "missions": [
+    {
+      "nombre": "SITL route 1",
+      "descripcion": null,
+      "horario_inicio_programado": null,
+      "id": 1,
+      "creado_por": 1,
+      "estado": "FINALIZADA",
+      "created_at": "2026-10-27T10:28:14.998983",
+      "iniciada_at": "2026-10-27T10:28:15.022584-06:00",
+      "finalizada_at": "2026-10-27T10:28:55.302140-06:00",
+      "waypoints_completados": 2,
+      "error_ejecucion": null,
+      "waypoints": [
+        {
+          "orden_waypoint": 1,
+          "latitud": 20.70436,
+          "longitud": -100.44358,
+          "altitud_metros": 5.0,
+          "id": 1
+        },
+        {
+          "orden_waypoint": 2,
+          "latitud": 20.70428,
+          "longitud": -100.44358,
+          "altitud_metros": 5.0,
+          "id": 2
+        }
+      ]
+    },
+    {
+      "nombre": "SITL route 2",
+      "descripcion": null,
+      "horario_inicio_programado": null,
+      "id": 2,
+      "creado_por": 1,
+      "estado": "FINALIZADA",
+      "created_at": "2026-10-27T10:28:55.479986",
+      "iniciada_at": "2026-10-27T10:28:55.485496-06:00",
+      "finalizada_at": "2026-10-27T10:29:34.511493-06:00",
+      "waypoints_completados": 2,
+      "error_ejecucion": null,
+      "waypoints": [
+        {
+          "orden_waypoint": 1,
+          "latitud": 20.70428,
+          "longitud": -100.44346,
+          "altitud_metros": 5.0,
+          "id": 3
+        },
+        {
+          "orden_waypoint": 2,
+          "latitud": 20.70428,
+          "longitud": -100.44358,
+          "altitud_metros": 5.0,
+          "id": 4
+        }
+      ]
+    },
+    {
+      "nombre": "SITL route 3",
+      "descripcion": null,
+      "horario_inicio_programado": null,
+      "id": 3,
+      "creado_por": 1,
+      "estado": "CANCELADA",
+      "created_at": "2026-10-27T10:29:34.937120",
+      "iniciada_at": "2026-10-27T10:29:34.942859-06:00",
+      "finalizada_at": "2026-10-27T10:29:56.705531-06:00",
+      "waypoints_completados": 0,
+      "error_ejecucion": null,
+      "waypoints": [
+        {
+          "orden_waypoint": 1,
+          "latitud": 20.70478,
+          "longitud": -100.44308,
+          "altitud_metros": 5.0,
+          "id": 5
+        },
+        {
+          "orden_waypoint": 2,
+          "latitud": 20.70428,
+          "longitud": -100.44358,
+          "altitud_metros": 5.0,
+          "id": 6
+        }
+      ]
+    }
+  ],
+  "passed": true,
+  "database": "postgresql",
+  "telemetry_samples": 202,
+  "demo": "data/sitl-demo.mp4",
+  "raw_telemetry": "data/sitl-postgres-report.json"
+}

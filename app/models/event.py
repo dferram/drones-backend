@@ -1,8 +1,15 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base_class import Base
 from app.models.detection import Deteccion
+
+if TYPE_CHECKING:
+    from app.models.detection import Deteccion
+
 
 class Evento(Base):
     __tablename__ = "eventos"

@@ -483,3 +483,87 @@ Los errores de validación (422) incluyen detalles por campo:
 `GET /missions/{id}` incluye `waypoints_completados`, `iniciada_at`, `finalizada_at` y `error_ejecucion`. Los estados adicionales son `CANCELANDO`, `FALLIDA` y `RECUPERACION`. Inicio devuelve 404 si no existe la misión, 409 si no está programada o el vehículo está reservado, 422 para una ruta histórica inválida y 503 si el dron no está listo. Recuperación devuelve 409 si aún existe un ejecutor o no hay reserva y 503 si no se confirma que el vehículo está en tierra.
 
 Los waypoints deben tener orden único y consecutivo desde 1. Las fechas con zona se convierten a UTC; sin zona se interpretan como UTC. El planificador está desactivado por defecto. Ver [ejecución de misiones](MISSION_EXECUTION.md) para configuración, estados y recuperación.
+
+## Consulta de telemetría
+
+`GET /api/v1/telemetry/` requiere un token de ADMIN o GUARDIA. Consulta el
+vehículo conectado previamente mediante `/api/v1/drone/connect`; esta lectura no
+conecta ni envía comandos al vehículo.
+
+```json
+{
+  "timestamp": "2026-10-27T15:00:00Z",
+  "heartbeat_age_seconds": 0.4,
+  "armed": true,
+  "mode": "GUIDED",
+  "latitude": 20.58,
+  "longitude": -100.38,
+  "relative_altitude_m": 15.0,
+  "battery_percent": 85.0,
+  "groundspeed_m_s": 2.5
+}
+```
+
+`timestamp` representa el instante UTC de consulta, no la captura simultánea de
+los sensores. Los atributos son los últimos recibidos por DroneKit. Los valores
+numéricos ausentes, no finitos o fuera de rango se devuelven como `null`. Sin
+conexión o con heartbeat ausente, inválido o mayor a cinco segundos devuelve
+HTTP 503; sin autenticación, HTTP 401. Es una consulta HTTP para polling, no un
+stream WebSocket. La frescura del heartbeat no garantiza la de cada sensor.
+
+## Ingesta de detecciones y agrupación de eventos
+
+`POST /api/v1/detections/ingest` requiere `Authorization: Bearer <token ADMIN>`.
+Un GUARDIA puede consultar y actualizar eventos, pero no producir detecciones.
+
+```json
+{
+  "vuelo_id": null,
+  "tipo": "PERSONA",
+  "nivel_confianza": 0.91,
+  "frame_url": "/storage/frames/frame_intruder_01.jpg",
+  "latitud": 20.5888,
+  "longitud": -100.3899,
+  "timestamp": "2026-10-27T23:15:00-06:00"
+}
+```
+
+- Solo se aceptan `PERSONA` y `HUMO` (se normalizan espacios y mayúsculas).
+- Confianza entre 0 y 1, coordenadas finitas válidas, ID de vuelo positivo o `null`
+  y referencia de evidencia de hasta 255 caracteres. `vuelo_id` sigue siendo una
+  referencia externa; no se valida contra `misiones`. No se aceptan campos extra.
+- `timestamp` debe tener offset o `Z`. Si se omite o es `null`, se usa la hora UTC
+  de recepción. Se persiste UTC sin zona y se responde ISO 8601 con `Z`.
+- Confianza menor a 0.70: se conserva la detección sin generar evento.
+- HUMO genera un evento crítico. PERSONA genera evento alto únicamente de 21:00
+  (incluido) a 06:00 (excluido), en `EVENT_TIMEZONE` (`America/Mexico_City`).
+- Un evento abierto (`PENDIENTE` o `EN_REVISION`) del mismo tipo agrupa detecciones
+  con el mismo `vuelo_id`, dentro de ±`EVENT_DEDUP_SECONDS` (60) del instante de
+  creación y a `EVENT_DEDUP_RADIUS_M` (30) metros como máximo de su primera
+  evidencia. El ancla no se desplaza con los frames. Se aceptan frames desordenados.
+  Un evento `RESUELTO` no recibe nueva evidencia. Los valores `vuelo_id=null`
+  comparten grupo: productores de vuelos distintos deben enviar su identificador.
+- Cada petición válida devuelve 201 y crea una detección, incluso si comparte
+  `evento_id`. Esto agrupa incidentes; no ofrece idempotencia de peticiones.
+- Se conserva cada referencia de evidencia en el detalle del evento. El servidor
+  todavía no captura, sube ni comprueba la existencia de esos archivos.
+
+La transacción de ingesta revierte detección y evento ante un fallo. PostgreSQL
+serializa estas transacciones entre procesos mediante un advisory lock; SQLite
+solo dispone de exclusión dentro de un proceso. No usar SQLite con varios workers.
+
+`GET /api/v1/events/` admite filtros de fecha con offset; se convierten a UTC.
+Fechas de filtro sin offset se interpretan como UTC. Un rango invertido devuelve
+422. `created_at` se responde con `Z`.
+
+**Compatibilidad:** los productores que enviaban fechas sin zona deben añadir el
+offset correcto. Los registros históricos no se convierten automáticamente: su
+zona original no puede inferirse y debe revisarse antes de reutilizarlos como
+evidencia de horario. Los serializadores interpretan esos valores históricos
+como UTC.
+
+## Video
+
+Disponibles `GET /api/v1/video/status`, `/api/v1/video/frame` (JPEG) y
+`/api/v1/video/stream` (MJPEG), para ADMIN/GUARDIA. El video está desactivado por
+defecto. Configuración, contratos, ejemplos y límites en [VIDEO.md](VIDEO.md).

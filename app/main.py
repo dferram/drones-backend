@@ -8,15 +8,21 @@ from fastapi.responses import JSONResponse
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.services.mission_service import MissionError, mission_service
+from app.services.video_service import video_service
+from app.services.vision_service import vision_service
 
 
 @asynccontextmanager
 async def lifespan(app):
+    video_service.start()
+    vision_service.start()
     if settings.MISSION_SCHEDULER_ENABLED:
         mission_service.start_scheduler()
     try:
         yield
     finally:
+        await asyncio.to_thread(vision_service.stop)
+        await asyncio.to_thread(video_service.stop)
         await asyncio.to_thread(mission_service.shutdown)
 
 

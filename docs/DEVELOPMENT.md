@@ -347,3 +347,23 @@ Consulta la pestaña **Actions** en GitHub:
 Después de `alembic upgrade head`, ejecuta `python -m app.bootstrap_admin`. El comando solicita la contraseña sin mostrarla, crea los roles necesarios y rechaza la operación si ya existe un administrador. Ejecuta este paso una sola vez, antes de abrir la API a clientes. Los siguientes usuarios se crean en `/api/v1/auth/register` con el token de un ADMIN.
 
 Las pruebas generan su propia clave y usan SQLite; no necesitan copiar `.env.example`.
+
+## Integración de ingesta con PostgreSQL
+
+La suite usual usa SQLite y omite `test_postgres_ingestion.py` si no está definida
+`TEST_POSTGRES_URL`. Para comprobar migraciones reales y deduplicación con cuatro
+procesos independientes:
+
+```bash
+TEST_POSTGRES_URL=postgresql://test_user:test_password@localhost:5432/drones_test \
+  pytest tests/test_postgres_ingestion.py -v
+```
+
+Usar una base de pruebas. El usuario necesita permiso para crear esquemas. El test
+crea un esquema con nombre aleatorio, aplica `alembic upgrade head`, ingesta ocho
+frames desde procesos separados, verifica un evento y ocho detecciones y elimina
+su propio esquema al terminar. No opera sobre tablas del esquema público.
+
+El workflow CI incluye un servicio PostgreSQL 16 y ejecuta este caso junto con
+la suite. Esta prueba valida persistencia y concurrencia de detecciones; la
+integración de vuelos con PostgreSQL + SITL sigue pendiente.

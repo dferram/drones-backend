@@ -91,3 +91,11 @@ def test_takeoff_and_return(flight):
     assert flight.vehicle.armed is True
     assert flight.return_to_launch()
     assert flight.vehicle.mode.name == "RTL"
+
+
+def test_legacy_copter_uses_set_mode_without_arming_bit(flight):
+    flight.vehicle.version = SimpleNamespace(major=3, minor=3)
+    flight.vehicle._master.target_system = 1
+    flight.vehicle._master.mode_mapping.return_value = {"GUIDED": 4, "RTL": 6}
+    flight._set_mode("GUIDED")
+    flight.vehicle._master.mav.set_mode_send.assert_called_once_with(1, 1, 4)

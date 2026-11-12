@@ -1,18 +1,7 @@
 import logging
 import math
 import time
-
-# --- Parche de compatibilidad Python 3.10+ para DroneKit ---
-import collections
-import collections.abc
-
-collections.MutableMapping = collections.abc.MutableMapping
-collections.Mapping = collections.abc.Mapping
-collections.Iterable = collections.abc.Iterable
-# ------------------------------------------------------------
-
-from dronekit import VehicleMode  # Tu importación habitual continúa aquí abajo
-from dronekit import connect as dronekit_connect
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +48,30 @@ class DroneService:
         if self.vehicle is None:
             raise RuntimeError("Dron no conectado")
         heartbeat = self.vehicle.last_heartbeat
-        if heartbeat is None or not math.isfinite(heartbeat) or heartbeat > 5:
+        if heartbeat is None or not math.isfinite(heartbeat) or not 0 <= heartbeat <= 5:
             raise RuntimeError("Telemetría del dron ausente o desactualizada")
+
+    def telemetry(self):
+        self.ensure_connected()
+        vehicle = self.vehicle
+        position = vehicle.location.global_relative_frame
+
+        def finite(value, minimum=-math.inf, maximum=math.inf):
+            if value is None or not math.isfinite(value) or not minimum <= value <= maximum:
+                return None
+            return float(value)
+
+        return {
+            "timestamp": datetime.now(UTC),
+            "heartbeat_age_seconds": vehicle.last_heartbeat,
+            "armed": vehicle.armed,
+            "mode": getattr(vehicle.mode, "name", None),
+            "latitude": finite(position.lat, -90, 90),
+            "longitude": finite(position.lon, -180, 180),
+            "relative_altitude_m": finite(position.alt),
+            "battery_percent": finite(getattr(vehicle.battery, "level", None), 0, 100),
+            "groundspeed_m_s": finite(vehicle.groundspeed, 0),
+        }
 
     def is_grounded(self):
         self.ensure_connected()
@@ -102,7 +113,7 @@ class DroneService:
         if not math.isfinite(target_altitude) or not 2 <= target_altitude <= 200:
             raise ValueError("Altitud fuera de rango (2–200 metros)")
         self._wait(lambda: self.vehicle.is_armable, timeout, "prearmado", cancel)
-        self.vehicle.mode = VehicleMode("GUIDED")
+        self._set_mode("GUIDED")
         self._wait(lambda: self.vehicle.mode.name == "GUIDED", timeout, "modo GUIDED", cancel)
         self.vehicle.armed = True
         self._wait(lambda: self.vehicle.armed, timeout, "armado", cancel, guided=True)
@@ -146,8 +157,22 @@ class DroneService:
 
     def return_to_launch(self) -> bool:
         self.ensure_connected()
-        self.vehicle.mode = VehicleMode("RTL")
+        self._set_mode("RTL")
         return True
+
+    def _set_mode(self, name):
+        # ArduCopter 3.3 no acepta MAV_CMD_DO_SET_MODE usado por DroneKit actual.
+        # SET_MODE usa solo CUSTOM_MODE_ENABLED; no fuerza el bit de armado.
+        version = getattr(self.vehicle, "version", None)
+        major, minor = getattr(version, "major", None), getattr(version, "minor", None)
+        if major == 3 and isinstance(minor, int) and minor <= 3:
+            master = self.vehicle._master
+            modes = master.mode_mapping()
+            if not modes or name not in modes:
+                raise RuntimeError("Modo de vuelo no disponible")
+            master.mav.set_mode_send(master.target_system, 1, modes[name])
+        else:
+            self.vehicle.mode = VehicleMode(name)
 
     def wait_landed(self, timeout=180):
         self._wait(self.is_grounded, timeout, "aterrizaje y desarmado")

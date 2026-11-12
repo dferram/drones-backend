@@ -1,6 +1,8 @@
 $kind: http-request
-url: http://127.0.1:8000/detections/ingest
+url: http://localhost:8000/api/v1/detections/ingest
 method: POST
+headers:
+  Authorization: Bearer {{admin_token}}
 body:
   type: json
   content: "{\r
@@ -17,7 +19,7 @@ body:
 
     \  \"longitud\": -100.3899,\r
 
-    \  \"timestamp\": \"2026-10-27T23:15:00\"\r
+    \  \"timestamp\": \"2026-10-27T23:15:00-06:00\"\r
 
     }"
 scripts:

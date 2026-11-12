@@ -383,3 +383,9 @@ El registro de usuarios requiere ADMIN. Conectar y despegar requiere ADMIN; RTL 
 ## Misiones dinámicas
 
 Aplicar `alembic upgrade head` antes de iniciar esta versión. Las rutas guardadas se ejecutan con `POST /api/v1/missions/{id}/start` (ADMIN); el progreso se consulta en el detalle de la misión. Usar una única instancia de control con un solo worker. La ejecución por horario es opcional mediante `MISSION_SCHEDULER_ENABLED=true` y está desactivada por defecto. Ver [ejecución, cancelación y recuperación](docs/MISSION_EXECUTION.md).
+
+### Video simulado
+
+Con `VIDEO_ENABLED=true`, el backend genera frames sintéticos y ofrece snapshots
+JPEG y streaming MJPEG autenticado. También permite reproducir un archivo local
+como fuente simulada. Consulta [activación, endpoints y pruebas de video](docs/VIDEO.md).

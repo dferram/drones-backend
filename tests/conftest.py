@@ -22,6 +22,8 @@ import secrets
 os.environ["SECRET_KEY"] = secrets.token_hex(32)
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["MISSION_SCHEDULER_ENABLED"] = "false"
+os.environ["VIDEO_ENABLED"] = "false"
+os.environ["VISION_ENABLED"] = "false"
 
 import pytest
 from fastapi.testclient import TestClient

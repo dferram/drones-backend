@@ -1,5 +1,7 @@
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from datetime import UTC, datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
+
 from app.schemas.detection import DeteccionResponse
 
 
@@ -15,7 +17,7 @@ class EventoStatusUpdate(BaseModel):
         ...,
         pattern="^(EN_REVISION|RESUELTO)$",
         description="Nuevo estado del evento. Valores permitidos: 'EN_REVISION' o 'RESUELTO'",
-        examples=["EN_REVISION"]
+        examples=["EN_REVISION"],
     )
 
 
@@ -24,6 +26,10 @@ class EventoResponse(EventoBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("created_at")
+    def serialize_created_at(self, value):
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 class EventoDetailResponse(EventoResponse):
